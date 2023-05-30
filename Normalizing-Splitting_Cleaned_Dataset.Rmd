@@ -26,21 +26,21 @@ library(caret)
 ## Read data files
 Read the pre-cleaned data CSV file. This file does not contain missing values and outliers anymore.
 ``` {r read_csv}
-# Read CSV data file, that contains pre-cleaned dataset
-cleaned.data <- read.csv("[path_to_file]\\Cleaned_patients.csv") 
+# Read CSV data file, that contains pre-cleaned data set
+cleaned.data <- read.csv("C:\\Users\\rdede\\Documents\\MNSU - master\\Semester 2 - Summer 2023\\Group Assignment\\Cleaned_patients.csv") 
 ```
 
 ## Normalize data
-Before we split our datasets or train our model, we normalize the dataset with a min-max scaler. This means that all values will be divided by their max, while the min is put to 0, to get all values between 0 and 1. We use normalization to make variables have a similar scale, which improves training stability and performance.
+Before we split our data sets or train our model, we normalize the data set with a min-max scale. This means that all values will be divided by their max, while the min is put to 0, to get all values between 0 and 1. We use normalization to make variables have a similar scale, which improves training stability and performance.
 
 ``` {r normalize}
 # Set up normalization function
 process <- preProcess(cleaned.data, method=c("range"))
 
-# Execute Min-Max normalization on the cleaned dataset
+# Execute Min-Max normalization on the cleaned data set
 norm.data <- predict(process, cleaned.data)
 
-# Show normalized dataset
+# Show normalized data set
 norm.data
 ```
 
@@ -69,6 +69,6 @@ test.data
 After the normalization of the data set and splitting the data set, we have decided to save the two files in separate CSV files. This way, we are always sure that the data remains the same on which we will train our two logistic regression models. This will be ideal for an optimal comparison in our hypothesis comparison later on.
 
 ``` {r save_csv}
-write.csv(train.data, "train_data.csv")
-write.csv(test.data, "test_data.csv")
+write.csv(train.data, "train_data.csv", row.names = FALSE)
+write.csv(test.data, "test_data.csv", row.names = FALSE)
 ```
