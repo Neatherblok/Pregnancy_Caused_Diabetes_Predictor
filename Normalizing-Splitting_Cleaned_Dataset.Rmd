@@ -1,0 +1,74 @@
+---
+title: "Normalizing - Splitting Cleaned Dataset"
+author: "Ricardo de Deijn"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install packages
+Install package **caret** to achieve data set normalization.
+
+``` {r install_pckg}
+install.packages("caret")
+```
+
+## Import packages
+Import package **caret** so data normalization can get executed with this package later in this project.
+
+``` {r import_pckg}
+library(caret)
+```
+
+## Read data files
+Read the pre-cleaned data CSV file. This file does not contain missing values and outliers anymore.
+``` {r read_csv}
+# Read CSV data file, that contains pre-cleaned dataset
+cleaned.data <- read.csv("[path_to_file]\\Cleaned_patients.csv") 
+```
+
+## Normalize data
+Before we split our datasets or train our model, we normalize the dataset with a min-max scaler. This means that all values will be divided by their max, while the min is put to 0, to get all values between 0 and 1. We use normalization to make variables have a similar scale, which improves training stability and performance.
+
+``` {r normalize}
+# Set up normalization function
+process <- preProcess(cleaned.data, method=c("range"))
+
+# Execute Min-Max normalization on the cleaned dataset
+norm.data <- predict(process, cleaned.data)
+
+# Show normalized dataset
+norm.data
+```
+
+## Random split data
+To train our models, we need a train set and a test dataset. We would like to have the same train dataset for both the logistic regression, to get a good comparison of its performance. We decided to use random generator seed *130* to achieve this. With a pre set seed, we will always acquire the same rows in our datasets and it will improve reproducability of our findings. 
+We have split the dataset in a 80/20-split. We have chosen for this, because we have a limited amount of data and would like to have enough data to train the model on. We hope with this 80/20-split to achieve enough generalization of the model to achieve optimal results in the predictions of the 20% test set.
+
+``` {r rand_split}
+# pre-set properties for random split 
+train.size = floor(0.8*nrow(norm.data))
+set.seed(130)
+
+# randomly split data in r according to generator seed 130
+picked = sample(seq_len(nrow(norm.data)),size = train.size)
+
+# Divide the data set up in two data set according to picked sample
+train.data =norm.data[picked,]
+test.data =norm.data[-picked,]
+
+# Show the two split data sets
+train.data
+test.data
+```
+
+## Write CSV files
+After the normalization of the data set and splitting the data set, we have decided to save the two files in separate CSV files. This way, we are always sure that the data remains the same on which we will train our two logistic regression models. This will be ideal for an optimal comparison in our hypothesis comparison later on.
+
+``` {r save_csv}
+write.csv(train.data, "train_data.csv")
+write.csv(test.data, "test_data.csv")
+```
