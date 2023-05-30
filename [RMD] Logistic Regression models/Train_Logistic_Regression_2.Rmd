@@ -1,0 +1,52 @@
+---
+title: "Training Logistic Regression Model 2"
+author: "Ricardo de Deijn"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install packages
+``` {r install_pcks}
+install.packages("pscl")
+```
+
+
+## Import packages
+``` {r import_pcks}
+library(pscl)
+```
+
+## Read data files
+Read the pre-split train and test CSV files and save them in two data frames, so they are able to be used in the logistic regression model.
+``` {r read_csv}
+# Read CSV train and test data files
+train.data <- read.csv("[path_to_file]\\train_data.csv") 
+test.data <- read.csv("[path_to_file]\\test_data.csv")
+```
+
+## Train logistic Regression model
+``` {r train_mdl}
+model <- glm(Diagnosis ~.,family=binomial(link='logit'),data=train.data)
+```
+
+## Summarize Logistic Regression Model
+``` {r summ_mdl}
+summary(model)
+```
+
+## Get McFadden R-squared score
+``` {r r2_mdl}
+pR2(model)
+```
+
+## Get Model accuracy score
+``` {r acc_mdl}
+fitted.results <- predict(model,test.data,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+misClassificError <- mean(fitted.results != test.data$Diagnosis)
+print(paste('Accuracy',1-misClassificError))
+```
