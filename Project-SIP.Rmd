@@ -1,0 +1,114 @@
+---
+title: "Project"
+author: "Srinath"
+date: "2023-05-29"
+output: word_document
+---
+
+#library import
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+```
+#Data Load
+```{r}
+Data <- read.csv("C:\\Users\\srina\\Downloads\\patients.csv")
+```
+#Read First Few rows
+```{r}
+head(Data)
+```
+#discriptive stats
+```{r}
+summary(Data[, 1:8])
+```
+#EDA Visualization
+```{r}
+##Box Plot
+subset_data <- Data[, 1:8]
+long_data <- pivot_longer(subset_data, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+```
+##Histogram
+```{r}
+Pregnancies <- ggplot(Data, aes(x = Pregnancies)) + geom_histogram() + ggtitle("Pregnancies")
+Glucose <- ggplot(Data, aes(x = Glucose)) + geom_histogram() + ggtitle("Glucose")
+BloodPressure <- ggplot(Data, aes(x = BloodPressure)) + geom_histogram() + ggtitle("Blood Pressure")
+SkinThickness <- ggplot(Data, aes(x = SkinThickness)) + geom_histogram() + ggtitle("Skin Thickness")
+Insulin <- ggplot(Data, aes(x = Insulin)) + geom_histogram() + ggtitle("Insulin")
+BMI <- ggplot(Data, aes(x = BMI)) + geom_histogram() + ggtitle("BMI")
+Pedigree <- ggplot(Data, aes(x = Pedigree)) + geom_histogram() + ggtitle("Pedigree")
+Age <- ggplot(Data, aes(x = Age)) + geom_histogram() + ggtitle("Age")
+grid.arrange(
+  Pregnancies, Glucose, BloodPressure, SkinThickness,
+  Insulin, BMI, Pedigree, Age,
+  nrow = 3
+)
+```
+##PIe Chart
+```{r}
+ggplot(Data, aes(x = "", fill = factor(Diagnosis))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(fill = "Diagnosis") +
+  ggtitle("Diagnosis Distribution") +
+  theme_void()
+```
+#Data Cleaning
+all zeros were said to be as NA's hence i would replace the zeros with Medians
+```{r}
+for (i in 1:8) {
+  Data[, i] <- ifelse(Data[, i] == 0, median(Data[, i], na.rm = TRUE), Data[, i])
+}
+```
+#Read First Few rows to see if 0's were replaced by median of the column
+```{r}
+head(Data)
+```
+#Removing outliers using capping method
+```{r}
+treating_outliers <- function(x) {
+  qntls <- quantile(x, probs = c(0.25, 0.75))
+  iqr <- qntls[2] - qntls[1]
+  lb <- qntls[1] - 1.5 * iqr
+  ub <- qntls[2] + 1.5 * iqr
+  x[x < lb] <- lb
+  x[x > ub] <- ub
+  return(x)
+}
+
+Data[, 1:8] <- apply(Data[, 1:8], 2, treating_outliers)
+
+
+##Box Plot
+subset_data <- Data[, 1:8]
+long_data <- pivot_longer(subset_data, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+
+
+```
+
+#Correlation Matrix
+```{r}
+library("pheatmap")
+Correlation_Mtrx <- cor(Data)
+pheatmap(Correlation_Mtrx,
+         main = "Correlation%",
+         fontsize = 10,
+         fontsize_row = 8,
+         fontsize_col = 8,
+         color = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+         show_rownames = TRUE,
+         show_colnames = TRUE)
+
+```
+
