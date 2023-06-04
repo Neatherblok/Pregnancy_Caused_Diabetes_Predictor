@@ -18,29 +18,29 @@ library(zoo)
 ## Load CSV Data File
 ```{r}
 # Load data 
-Data <- read.csv("C:\\Users\\rdede\\Downloads\\patients.csv")
+patient.data <- read.csv("C:\\Users\\rdede\\Downloads\\patients.csv")
 
 # Show first few rows
-head(Data)
+head(patient.data)
 
 # Show statistical summary
-summary(Data)
+summary(patient.data)
 ```
 
 ## Data Dimensions
 ```{r}
 ## Data dimension before deleting duplicates
-dim(Data)
+dim(patient.data)
 
-##Data dimension after deleting duplicates
-Unique_data<-unique(Data)
-dim(Unique_data)
+## Data dimension after deleting duplicates
+Unique.data<-unique(patient.data)
+dim(Unique.data)
 ```
 
 ## Dependent Value Data Distribution
 ```{r}
 ## Show distribution of target variable in pie chart
-ggplot(Unique_data, aes(x = "", fill = factor(Diagnosis))) +
+ggplot(Unique.data, aes(x = "", fill = factor(Diagnosis))) +
   geom_bar(width = 1) +
   coord_polar(theta = "y") +
   labs(fill = "Diagnosis") +
@@ -49,27 +49,29 @@ ggplot(Unique_data, aes(x = "", fill = factor(Diagnosis))) +
 ```
 
 ## Adressing Unbalanced Dependent Value
+Five features that contains 0 values (which are equal to missing values) that is about the same amount as that is needed to get the target value balanced. Since False (0) values for Diagnosis are over represented, False (0) values are removed where there are missing values for the variables Glucose, BloodPressure, SkinThickness, Insulin, and BMI. This way, the big skewness to 0 is removed for these variables, and is the target value more balanced to contain a equal amount of True and False Diagnosis.
 ```{r}
 #Since data distribution of target variable is not even, followed downsizing of Diagnosis "0" underlined data 
 # Subset the rows with Diagnosis value of 0
-subset_data <- Data[Data$Diagnosis == 0, ]
+no.diabetes.data <- patient.data[patient.data$Diagnosis == 0, ]
 
 # Check for 0 values in specified columns and remove the rows
-filtered_data <- subset_data[!(subset_data$Glucose == 0 | subset_data$BloodPressure == 0 | subset_data$SkinThickness == 0 | subset_data$Insulin == 0 | subset_data$BMI == 0), ]
+no.diabetes.filtered.data <- no.diabetes.data[!(no.diabetes.data$Glucose == 0 | no.diabetes.data$BloodPressure == 0 | no.diabetes.data$SkinThickness == 0 | no.diabetes.data$Insulin == 0 | no.diabetes.data$BMI == 0), ]
 
 # Combine the filtered rows with the remaining rows that have Diagnosis value not equal to 0
-final_data <- rbind(filtered_data, Data[Data$Diagnosis != 0, ])
+balanced.patient.data <- rbind(no.diabetes.filtered.data, patient.data[patient.data$Diagnosis != 0, ])
 
 # Reset row names
-row.names(final_data) <- NULL
+row.names(balanced.patient.data) <- NULL
 
-head(final_data)
+# Show first few rows of data frame
+head(balanced.patient.data)
 ```
 
 ## Dependent Value Data Distribution After Balancing
 ```{r}
 # Show distribution of target variable post balancing in pie chart
-ggplot(final_data, aes(x = "", fill = factor(Diagnosis))) +
+ggplot(balanced.patient.data, aes(x = "", fill = factor(Diagnosis))) +
   geom_bar(width = 1) +
   coord_polar(theta = "y") +
   labs(fill = "Diagnosis") +
@@ -81,26 +83,26 @@ ggplot(final_data, aes(x = "", fill = factor(Diagnosis))) +
 ```{r}
 #EDA Visualization
 ##Box Plot
-subset_data1 <- final_data[, 1:8]
-long_data <- pivot_longer(subset_data1, everything(), names_to = "variable", values_to = "value")
-ggplot(long_data, aes(x = variable, y = value)) +
+independent.variables <- balanced.patient.data[, 1:8]
+long.data <- pivot_longer(independent.variables, everything(), names_to = "variable", values_to = "value")
+ggplot(long.data, aes(x = variable, y = value)) +
   geom_boxplot() +
   xlab("") +
   ylab("Value") +
   theme_minimal()
 ```
 
-
+## Visualize Distributions of the Dataset
 ```{r}
 ##Histogram
-Pregnancies <- ggplot(final_data, aes(x = Pregnancies)) + geom_histogram() + ggtitle("Pregnancies")
-Glucose <- ggplot(final_data, aes(x = Glucose)) + geom_histogram() + ggtitle("Glucose")
-BloodPressure <- ggplot(final_data, aes(x = BloodPressure)) + geom_histogram() + ggtitle("Blood Pressure")
-SkinThickness <- ggplot(final_data, aes(x = SkinThickness)) + geom_histogram() + ggtitle("Skin Thickness")
-Insulin <- ggplot(final_data, aes(x = Insulin)) + geom_histogram() + ggtitle("Insulin")
-BMI <- ggplot(final_data, aes(x = BMI)) + geom_histogram() + ggtitle("BMI")
-Pedigree <- ggplot(final_data, aes(x = Pedigree)) + geom_histogram() + ggtitle("Pedigree")
-Age <- ggplot(final_data, aes(x = Age)) + geom_histogram() + ggtitle("Age")
+Pregnancies <- ggplot(balanced.patient.data, aes(x = Pregnancies)) + geom_histogram() + ggtitle("Pregnancies")
+Glucose <- ggplot(balanced.patient.data, aes(x = Glucose)) + geom_histogram() + ggtitle("Glucose")
+BloodPressure <- ggplot(balanced.patient.data, aes(x = BloodPressure)) + geom_histogram() + ggtitle("Blood Pressure")
+SkinThickness <- ggplot(balanced.patient.data, aes(x = SkinThickness)) + geom_histogram() + ggtitle("Skin Thickness")
+Insulin <- ggplot(balanced.patient.data, aes(x = Insulin)) + geom_histogram() + ggtitle("Insulin")
+BMI <- ggplot(balanced.patient.data, aes(x = BMI)) + geom_histogram() + ggtitle("BMI")
+Pedigree <- ggplot(balanced.patient.data, aes(x = Pedigree)) + geom_histogram() + ggtitle("Pedigree")
+Age <- ggplot(balanced.patient.data, aes(x = Age)) + geom_histogram() + ggtitle("Age")
 grid.arrange(
   Pregnancies, Glucose, BloodPressure, SkinThickness,
   Insulin, BMI, Pedigree, Age,
@@ -110,23 +112,23 @@ grid.arrange(
 ```
 
 
-
+## Replacing Missing Values
 ```{r}
-##Data Cleaning
-##all zeros were said to be as NA's hence i would replace the zeros with Medians
-for (i in 1:8) {
-  final_data[, i] <- ifelse(final_data[, i] == 0, median(final_data[final_data[, i] != 0, i], na.rm = TRUE), final_data[, i])
+
+cleaned.patient.data <- balanced.patient.data
+
+# All zeros for the independent variables were said to be as NAs hence can be replaced with Medians
+for (i in 2:8) {
+  cleaned.patient.data[, i] <- ifelse(balanced.patient.data[, i] == 0, median(balanced.patient.data[balanced.patient.data[, i] != 0, i], na.rm = TRUE), balanced.patient.data[, i])
 }
 
+# Show first few rows to see if 0's were replaced by median of the column
+head(cleaned.patient.data)
 ```
 
+## Removing Outliers 
 ```{r}
-##Read First Few rows to see if 0's were replaced by median of the column
-head(final_data)
-```
-
-```{r}
-##Removing outliers using capping method
+# Create a capping function
 treating_outliers <- function(x) {
   qntls <- quantile(x, probs = c(0.25, 0.75))
   iqr <- qntls[2] - qntls[1]
@@ -137,12 +139,13 @@ treating_outliers <- function(x) {
   return(x)
 }
 
-final_data[, 1:8] <- apply(final_data[, 1:8], 2, treating_outliers)
+# Apply capping function on independent variables
+cleaned.patient.data[, 1:8] <- apply(cleaned.patient.data[, 1:8], 2, treating_outliers)
 
 
-##Box Plot
-subset_data <- final_data[, 1:8]
-long_data <- pivot_longer(subset_data, everything(), names_to = "variable", values_to = "value")
+# Show new statistical summary through boxplot
+cleaned.independent.variables <- cleaned.patient.data[, 1:8]
+long_data <- pivot_longer(cleaned.independent.variables, everything(), names_to = "variable", values_to = "value")
 ggplot(long_data, aes(x = variable, y = value)) +
   geom_boxplot() +
   xlab("") +
@@ -157,7 +160,7 @@ variables <- c("Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insu
 # Loop through variables
 for (variable in variables) {
   # Perform Shapiro-Wilk test for normality
-  shapiro_test <- shapiro.test(final_data[[variable]])
+  shapiro_test <- shapiro.test(cleaned.patient.data[[variable]])
   
   # Print variable name and test results
   cat("Variable:", variable, "\n")
@@ -170,16 +173,16 @@ for (variable in variables) {
 
 ```{r}
 ##check summary post data cleaning
-summary(final_data[, 1:8])
+summary(cleaned.independent.variables)
 ```
 
 
 ```{r}
 ##Correlation Matrix
-#check Coorelation post data cleaning
-Correlation_Mtrx <- cor(final_data)
-Correlation_Percentages <- round(Correlation_Mtrx * 100, 2)
-pheatmap(Correlation_Percentages,
+#check correlation post data cleaning
+correlation.mtrx <- cor(cleaned.patient.data)
+correlation.percentages <- round(correlation.mtrx * 100, 2)
+pheatmap(correlation.percentages,
          main = "Correlation Matrix (%)",
          fontsize = 10,
          fontsize_row = 8,
@@ -193,3 +196,6 @@ pheatmap(Correlation_Percentages,
 
 ```
 
+``` {r}
+write.csv(cleaned.patient.data, "C:\\Users\\rdede\\Documents\\MNSU - master\\Semester 2 - Summer 2023\\Group Assignment\\Cleaned_patients.csv", row.names=FALSE)
+```
