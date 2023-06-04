@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 Install package **caret** to achieve data set normalization.
 
 ``` {r install_pckg}
-install.packages("caret")
+if(!require(carat)) install.packages("caret")
 ```
 
 ## Import packages
@@ -44,8 +44,12 @@ norm.data <- predict(process, cleaned.data)
 norm.data
 ```
 
+``` {r}
+ggplot(norm.data, aes(x = Glucose)) + geom_histogram(binwidth = 0.125) + geom_density(aes(y=0.25*after_stat(count)), colour="black", adjust=4) + ggtitle("Glucose") 
+```
+
 ## Random split data
-To train our models, we need a train set and a test dataset. We would like to have the same train dataset for both the logistic regression, to get a good comparison of its performance. We decided to use random generator seed *130* to achieve this. With a pre set seed, we will always acquire the same rows in our datasets and it will improve reproducability of our findings. 
+To train our models, we need a train set and a test data set. We would like to have the same train data set for both the logistic regression, to get a good comparison of its performance. We decided to use random generator seed *130* to achieve this. With a pre set seed, we will always acquire the same rows in our data sets and it will improve reproducability of our findings. 
 We have split the dataset in a 80/20-split. We have chosen for this, because we have a limited amount of data and would like to have enough data to train the model on. We hope with this 80/20-split to achieve enough generalization of the model to achieve optimal results in the predictions of the 20% test set.
 
 ``` {r rand_split}
