@@ -1,0 +1,261 @@
+---
+title: "Project"
+author: "Srinath"
+date: "2023-05-29"
+output: word_document
+---
+
+
+```{r}
+#library import
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(pheatmap)
+library(zoo)
+library(knitr)
+```
+
+```{r}
+#Data Load
+Data <- read.csv("C:\\Users\\srina\\Downloads\\patients.csv")
+```
+
+```{r}
+#Read First Few rows
+head(Data)
+```
+```{r}
+##Data Dimension before deleting duplicates
+dim(Data)
+##Data Dimension after deleting duplicates
+Unique_data<-unique(Data)
+dim(Unique_data)
+```
+```{r}
+##Target Distribution PIE chart
+ggplot(Unique_data, aes(x = "", fill = factor(Diagnosis))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(fill = "Diagnosis") +
+  ggtitle("Diagnosis Distribution") +
+  theme_void()
+```
+
+```{r}
+#Since data distribution of target variable is not even, followed downsizing of Diagnosis "0" underlined data where i removed those rows that have 0 values in Glucose, Bloodpreasure, skinthickness, insulin, BMI.
+# As 0's are minorty distribution group,we will Subset rows that has the Diagnosis value of 0 and remove odd row from that sunset and then append it under diagnosis 1.
+subset_data <- Data[Data$Diagnosis == 0, ]
+
+#  finding the odd rows:Check for 0 values in specified columns and remove the rows
+filtered_data <- subset_data[!(subset_data$Glucose == 0 | subset_data$BloodPressure == 0 | subset_data$SkinThickness == 0 | subset_data$Insulin == 0 | subset_data$BMI == 0), ]
+
+# Combine the filtered rows with the remaining rows that have Diagnosis value not equal to 0
+final_data <- rbind(filtered_data, Data[Data$Diagnosis != 0, ])
+
+# row names are reset
+row.names(final_data) <- NULL
+head(final_data)
+tail(final_data)
+```
+
+
+```{r}
+##PIe Chart
+#distribution of traget variable post pre
+ggplot(final_data, aes(x = "", fill = factor(Diagnosis))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(fill = "Diagnosis") +
+  ggtitle("Diagnosis_Distribution") +
+  theme_void()
+
+#Diagnosis distribution in numbers which folows approx 50%:50%
+diagnosis_counts <- table(final_data$Diagnosis)
+print(diagnosis_counts)
+```
+
+
+```{r}
+#discriptive stats
+summary(final_data[, 1:8])
+```
+
+```{r}
+#EDA Visualization
+##Box Plot
+subset_data1 <- final_data[, 1:8]
+long_data <- pivot_longer(subset_data1, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+```
+
+```{r}
+##Histogram
+Pregnancies <- ggplot(final_data, aes(x = Pregnancies)) + geom_histogram() + ggtitle("Pregnancies")
+Glucose <- ggplot(final_data, aes(x = Glucose)) + geom_histogram() + ggtitle("Glucose")
+BloodPressure <- ggplot(final_data, aes(x = BloodPressure)) + geom_histogram() + ggtitle("Blood Pressure")
+SkinThickness <- ggplot(final_data, aes(x = SkinThickness)) + geom_histogram() + ggtitle("Skin Thickness")
+Insulin <- ggplot(final_data, aes(x = Insulin)) + geom_histogram() + ggtitle("Insulin")
+BMI <- ggplot(final_data, aes(x = BMI)) + geom_histogram() + ggtitle("BMI")
+Pedigree <- ggplot(final_data, aes(x = Pedigree)) + geom_histogram() + ggtitle("Pedigree")
+Age <- ggplot(final_data, aes(x = Age)) + geom_histogram() + ggtitle("Age")
+grid.arrange(
+  Pregnancies, Glucose, BloodPressure, SkinThickness,
+  Insulin, BMI, Pedigree, Age,
+  nrow = 3
+)
+# By looking in the histograms we can say that except blood pressure, non of the other variables follow  normal distribution
+```
+
+
+
+```{r}
+##Data Cleaning
+##all zeros were said to be as NA's hence i would replace the zeros with Medians
+for (i in 2:8) {
+  final_data[, i] <- ifelse(final_data[, i] == 0, median(final_data[final_data[, i] != 0, i], na.rm = TRUE), final_data[, i])
+}
+
+```
+
+```{r}
+
+##Read First Few rows to see if 0's were replaced by median of the column
+head(final_data)
+```
+
+```{r}
+##Removing outliers using capping method
+treating_outliers <- function(x) {
+  qntls <- quantile(x, probs = c(0.25, 0.75))
+  iqr <- qntls[2] - qntls[1]
+  lb <- qntls[1] - 1.5 * iqr
+  ub <- qntls[2] + 1.5 * iqr
+  x[x < lb] <- lb
+  x[x > ub] <- ub
+  return(x)
+}
+
+final_data[, 1:8] <- apply(final_data[, 1:8], 2, treating_outliers)
+
+
+##By the revised box plot you can see that the outliers are treated and not present in the data that we are going to futher analyis
+subset_data <- final_data[, 1:8]
+long_data <- pivot_longer(subset_data, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+
+```
+```{r}
+#test check the normality
+variables <- c("Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "Pedigree", "Age")
+
+# Loop through variables
+for (variable in variables) {
+  # Perform Shapiro-Wilk to check the normality assumaption
+  shapiro_test <- shapiro.test(final_data[[variable]])
+  
+  # Print variable name and test results
+  cat("Variable:", variable, "\n")
+  cat("Shapiro-Wilk_(W):", shapiro_test$statistic, "\n")
+  cat("Shapiro-Wilk_p-value:", shapiro_test$p.value, "\n")
+  cat("\n")
+}
+
+#except blood presure all other variables doesnt follow normal distribition
+```
+
+```{r}
+##check summary post data cleaning
+summary(final_data[, 1:8])
+```
+
+
+
+```{r}
+##Correlation Matrix
+#check Coorelation post data cleaning
+Correlation_Mtrx <- cor(final_data)
+Correlation_Percentages <- round(Correlation_Mtrx * 100, 2)
+pheatmap(Correlation_Percentages,
+         main = "Correlation Matrix (%)",
+         fontsize = 8,
+         fontsize_row = 6,
+         fontsize_col = 6,
+         color = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         display_numbers = TRUE,
+         number_color = "black",
+         number_format = "%.2f%%")
+
+```
+```{r}
+##After looking into the correlation matrix i see that Pregnancies, Age, Glucose, BMI are relatively correlated when compared with other features, so picked those as X's in Model 1 
+Model1 <- glm(Diagnosis ~Pregnancies+ Age+Glucose+BMI, data = final_data, family = binomial)
+y_pred1 <- ifelse(predict(Model1, type = "response") > 0.5, 1, 0)
+confusionMatrix1 <- table(Actual = final_data$Diagnosis, Predicted = y_pred1)
+
+precision1 <- confusionMatrix1[2, 2] / sum(confusionMatrix1[, 2])
+recall1 <- confusionMatrix1[2, 2] / sum(confusionMatrix1[2, ])
+f1_score1 <- 2 * (precision1 * recall1) / (precision1 + recall1)
+support1 <- sum(confusionMatrix1)
+summary(Model1)
+
+##To see if there is any any variable that doesnt show any significance on a individual level, but would contribute if included so, used all the features in Model 2
+Model2 <- glm(Diagnosis ~ Pregnancies + Age + Glucose + Insulin + BMI + SkinThickness + BloodPressure + Pedigree, data = final_data)
+y_pred2 <- ifelse(predict(Model2, type = "response") > 0.5, 1, 0)
+confusionMatrix2 <- table(Actual = final_data$Diagnosis, Predicted = y_pred2)
+
+precision2 <- confusionMatrix2[2, 2] / sum(confusionMatrix2[, 2])
+recall2 <- confusionMatrix2[2, 2] / sum(confusionMatrix2[2, ])
+f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
+support2 <- sum(confusionMatrix2)
+
+summary(Model1)
+summary(Model2)
+
+metrics_df <- data.frame(
+  Model = c("Model 1", "Model 2"),
+  Precision = c(precision1, precision2),
+  Recall = c(recall1, recall2),
+  F1_Score = c(f1_score1, f1_score2),
+  Support = c(support1, support2) 
+)
+
+
+kable(metrics_df)
+
+##Hypothesis formation
+#H0: selected features of model1 provides better fit to the data
+#H1: all the features of Model2 provide better fit to the data
+
+##Log_likely_hood has been used to evalute the estimated models parametrs 
+logLik1 <- logLik(Model1)
+logLik2 <- logLik(Model2)
+
+statistic <- -2 * (logLik1 - logLik2)
+
+df1 <- length(coef(Model1))
+df2 <- length(coef(Model2))
+df <- df2 - df1
+
+pvalue <- pchisq(statistic, df, lower.tail = FALSE)
+cat("Test_Statistic:", statistic, "\n")
+cat("Degrees of Freedom:", df, "\n")
+cat("p-value:", pvalue, "\n")
+
+if (pvalue < 0.05) {
+  cat("All the features of Model2 provide better fit to the data and is significantly better than the Model 1 with selected features.\n")
+} else {
+  cat("There is no enough evidence to tell that the all features included in model2 provides a significantly better fit.\n")
+}
+##Model1 has lowest AIC 524.5 and higher residual deviation value 514 compared to model2. higher residual deviation with lower AIC makes the the model1 be a goodness of fit. considering all the features in the model2 didnt reduce the AIC further and also when we look at P value through log likely hood method we can find that p value is greater than 0.05 hence we can say that There is no enough evidence to tell that the all features included in model2 provides a significantly better fit.
+```
