@@ -1,0 +1,298 @@
+---
+title: "Training Logistic Regression Model 2"
+author: "Ricardo de Deijn"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install Packages
+``` {r install_pcks}
+# Install not installed project packages
+if(!require(pscl)) install.packages("pscl")
+if(!require(Metrics)) install.packages("Metrics")
+if(!require("ggstats")) install.packages("ggstats")
+if(!require("DescTools")) install.packages("DescTools")
+```
+
+
+## Import packages
+``` {r import_pcks}
+# Import all necessary project packages
+library(tidyverse)
+library(pscl)
+library(Metrics)
+library(ggstats)
+library(DescTools)
+
+```
+
+## Load Data Files
+Read the pre-split train and test CSV files and load them in two data frames, so they are able to be used in the logistic regression model.
+``` {r read_csv}
+# Load CSV train and test data files
+train.data.not.normal <- read.csv("C:\\Users\\rdede\\Documents\\GitHub\\Pregnancy_Caused_Diabetes_Predictor\\data\\train_data_not_normal.csv") 
+test.data.not.normal <- read.csv("C:\\Users\\rdede\\Documents\\GitHub\\Pregnancy_Caused_Diabetes_Predictor\\data\\test_data_not_normal.csv")
+
+train.data.normal <- read.csv("C:\\Users\\rdede\\Documents\\GitHub\\Pregnancy_Caused_Diabetes_Predictor\\data\\train_data_normal.csv") 
+test.data.normal <- read.csv("C:\\Users\\rdede\\Documents\\GitHub\\Pregnancy_Caused_Diabetes_Predictor\\data\\test_data_normal.csv")
+```
+
+### Train Logistic Regression Model 1
+After splitting, the models can get trained. The first model will be trained on the four most correlated variables of the normalized data set. As dependent variable we will be using Diagnosis.
+This model trains with family being binomial, with a logit link. The family being binomial means that the output of the model and the dependent variable will be binary value. The logit link specifies that this binary classification is a logistic regression, and it maps the probability of success to the linear predictor.
+``` {r train_lrm_1}
+# Train Logistic Regression model 2
+model.1 <- glm(Diagnosis ~ Pregnancies + Age + Glucose + BMI, data = train.data.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_1}
+# Summarize the findings of the first Logistic Regression model
+summary(model.1)
+```
+
+``` {r pred_lrm_1}
+# Predict the outcome using Logistic Regression Model 1
+mdl.1.fitted.results <- predict(model.1, test.data.normal,type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.1 <- ifelse(mdl.1.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_1}
+# Create a classification report for Logistic Regression Model 1
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.1 <- caret::confusionMatrix(factor(predictions.mdl.1), factor(test.data.normal$Diagnosis))
+print(classification.report.mdl.1)
+```
+
+## Train Logistic Regression Model 2
+After training Logistic Regression Model 2 we will try out what the difference is with a model that is normalized and still has all features. This model will be trained on all the features from the normalized train data set, with Diagnosis as the dependent variable.
+``` {r train_lrm_2}
+# Train Logistic Regression model 2
+model.2 <- glm(Diagnosis ~.,family=binomial(link='logit'),data=train.data.normal)
+```
+
+## Summarize Logistic Regression Model 2
+Now that the model has been trained, we can get a summary of what the findings of the model are on the original feature set. It shows which independent features have the most value for the eventual prediction of the dependent variable. The variables with the lowest p-value and most amount of stars have the most influence on the dependent variable.
+``` {r summ_lrm_2}
+# Summarize the findings of the second Logistic Regression model
+summary(model.2)
+```
+
+## Logistic Regression Model 2 Prediction
+After that the second Logistic Regression model has been trained on the whole feature set, it can predict the values that are in the test set. It will do this through the response type which will give back a probability for the tested observation between 0 and 1. 
+After all the observations are fitted, the predictions get converted to a binary value depending on the probability score. Values with a probability of 0.5 or higher gets converted to a 1 value, values under 0.5 get converted to the 0 value.
+``` {r pred_lrm_2}
+# Predict the outcome using Logistic Regression Model 2
+mdl.2.fitted.results <- predict(model.2, test.data.normal, type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.2 <- ifelse(mdl.2.fitted.results >= 0.5, 1, 0)
+```
+
+## Calculate Metrics for Logistic Regression Model 2
+After the logistic regression model predicted the values from the test set based on the whole feature set, the metrics can get calculated for this version. At first the confusion matrix and accuracy gets calculated, with the `confusionMatrix()` function from the caret package.
+``` {r conf_matrix_lrm_2}
+# Create a classification report
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.2 <- caret::confusionMatrix(factor(predictions.mdl.2), factor(test.data.normal$Diagnosis))
+print(classification.report.mdl.2)
+```
+
+### Train Logistic Regression Model 3
+``` {r train_lrm_3}
+# Train Logistic Regression model 3
+model.3 <- glm(Diagnosis ~Pregnancies + Age + Glucose + BMI, data = train.data.not.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_3}
+# Summarize the findings of the third Logistic Regression model
+summary(model.3)
+AIC(model.3)
+```
+
+``` {r pred_lrm_3}
+# Predict the outcome using Logistic Regression Model 3
+mdl.3.fitted.results <- predict(model.3, test.data.not.normal,type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.3 <- ifelse(mdl.3.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_3}
+# Create a classification report for Logistic Regression Model 3
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.3 <- caret::confusionMatrix(factor(predictions.mdl.3), factor(test.data.not.normal$Diagnosis))
+print(classification.report.mdl.3)
+```
+
+### Train Logistic Regression Model 4
+``` {r train_lrm_4}
+# Train Logistic Regression model 4
+model.4 <- glm(Diagnosis ~ ., data = train.data.not.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_4}
+# Summarize the findings of the fourth Logistic Regression model
+summary(model.4)
+```
+
+``` {r pred_lrm_4}
+# Predict the outcome using Logistic Regression Model 4
+mdl.4.fitted.results <- predict(model.4, test.data.not.normal,type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.4 <- ifelse(mdl.4.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_4}
+
+# Create a classification report for Logistic Regression Model 4
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.4 <- caret::confusionMatrix(factor(predictions.mdl.4), factor(test.data.not.normal$Diagnosis))
+print(classification.report.mdl.4)
+```
+### Comparing the models
+After all models have been trained, we are able to compare the models based on the classification report and accuracy scores that have been generated based on the test sets. In the following code, all accuracy, AIC and confidence interval scores are put beside each other.
+What stands out in this comparison is the following:
+
+- Both models that are trained on the best features dataset are performing the same
+- Both models that are trained on all features perform the same as well
+
+This means that normalization of the data does not influence the result of a logistic regression model.
+
+Other findings are:
+
+- The models trained on the best features have a higher accuracy score than the models trained on all features
+- The models trained on all features have a lower AIC score and smaller Confidence Interval ratio.
+
+This means that it is not clear which model actually performs the best. Normally AIC penalizes the model with more features heavier, but in this case this did not happen. This means that the models with all features might actually be a better predictor, which needs to be researched through a Likeliness Ratio Hypothesis test.
+
+``` {r comparison}
+df <- data.frame(Metrics=c("Accuracy", "AIC", "Confidence Interval Lower", "Confidence Interval Higher"),
+                  select_feature_normal=c(classification.report.mdl.1$overall[1], AIC(model.1),
+                              classification.report.mdl.1$overall[3], classification.report.mdl.1$overall[4]),
+                 
+                  all_normal=c(classification.report.mdl.2$overall[1], AIC(model.2), 
+                               classification.report.mdl.2$overall[3], classification.report.mdl.2$overall[4]),
+                 
+                  select_feature_not_normal=c(classification.report.mdl.3$overall[1], AIC(model.3),
+                                classification.report.mdl.3$overall[3], classification.report.mdl.3$overall[4]),
+                 
+                  all_not_normal=c(classification.report.mdl.4$overall[1], AIC(model.4), 
+                                classification.report.mdl.4$overall[3], classification.report.mdl.4$overall[4]))
+
+# Set metrics column as index
+rownames(df) <- df$Metrics
+
+# Remove original metrics column from data frame
+df$Metrics <- NULL
+
+# Show results
+df
+```
+
+### Visualizing Coefficients
+Underneath is the relationship between the coefficients and the dependent variable visualization. It shows that the p-value is under 0.05, as the dot in the middle is entirely filled. It also shows the strength of the variables over the x-axis, as **** is further to the right, it means that this variable has a higher influence on the dependent variable than **** does. The whiskers on the left and right represent the confidence interval so the uncertainty of the variance can be shown. Both whiskers are relatively small, which means that there is not a lot of uncertainty of the variance.
+``` {r coef_plot}
+# Visualize logistic regression coefficients
+ggcoef_model(model.1)
+ggcoef_model(model.2)
+ggcoef_model(model.3)
+ggcoef_model(model.4)
+```
+
+``` {r}
+
+# Number of times one anova comparison has been run
+anova.runs <- list(
+  anova.1 = 0,
+  anova.2 = 0,
+  anova.3 = 0,
+  anova.4 = 0
+)
+```
+
+``` {r hypothesis}
+
+# Testing significance of model 1 compared to model 3
+# H0: Model 1 (min-max scaled;best features selected) is more significant than model 3 (original scale; best features selected)
+execute.anova.1 <- function() {
+  eval.parent(substitute(anova.runs$anova.1 <- anova.runs$anova.1 + 1))
+  return(anova(model.1,model.3, test='LRT'))
+}
+
+# Testing significance of model 2 compared to model 4
+# H0: Model 2 (min-max scaled; all features) is more significant than model 4 (original scale; all features)
+execute.anova.2 <- function() {
+  eval.parent(substitute(anova.runs$anova.2 <- anova.runs$anova.2 + 1))
+  return(anova(model.2, model.4, test='LRT'))
+}
+
+# Testing significance of model 1 compared to model 2
+# H0: Model 1 (min-max scaled; best features selected) is more significant than model 2 (min-max scaled; all features)
+execute.anova.3 <- function() {
+  eval.parent(substitute(anova.runs$anova.3 <- anova.runs$anova.3 + 1))
+  return(anova(model.1, model.2, test='LRT'))
+}
+
+# Testing significance of model 3 compared to model 4
+# H0: Model 3 (original scale; best features selected) is more significant than model 4 (original scale; all features)
+execute.anova.4 <- function() {
+  eval.parent(substitute(anova.runs$anova.4 <- anova.runs$anova.4 + 1))
+  return(anova(model.3, model.4, test='LRT'))
+}
+
+anova.1 <- execute.anova.1()
+anova.2 <- execute.anova.2()
+anova.3 <- execute.anova.3()
+anova.4 <- execute.anova.4()
+
+```
+``` {r run_more}
+# Run Likeliness Ratio tests 3 more times, to use bonferroni correction
+for (i in 1:3) {
+  anova.1 <- execute.anova.1()
+  anova.2 <- execute.anova.2()
+  anova.3 <- execute.anova.3()
+  anova.4 <- execute.anova.4()
+  
+}
+print("All four Likeliness Ratio tests have run 3 more times.")
+```
+
+``` {r bonferroni_correction}
+
+bonferroni_corr <- function(p_value, num_run_test) {
+  
+  # Apply Bonferroni correction
+  adjusted.alpha <- 0.05 / num_run_test
+  
+  # Adjust the p-value using Bonferroni correction
+  adjusted.p.value <- p.adjust(p_value, method = "bonferroni")
+  
+  # Compare the adjusted p-value to the adjusted alpha
+  if (adjusted.p.value >= adjusted.alpha || is.na(adjusted.p.value)) {
+    # Fail to reject the null hypothesis
+    cat("There is no significant difference between the two models (after Bonferroni correction).", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+  } else {
+    # Reject the null hypothesis and conclude significant difference
+    cat("There is a significant difference between the two models (after Bonferroni correction).", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+
+  }
+}
+
+# Execute Bonferroni correction for all four Likeliness Ratio tests
+bonferroni_corr(anova.1$Pr[2], anova.runs$anova.1)
+bonferroni_corr(anova.2$Pr[2], anova.runs$anova.2)
+bonferroni_corr(anova.3$Pr[2], anova.runs$anova.3)
+bonferroni_corr(anova.4$Pr[2], anova.runs$anova.4)
+```
