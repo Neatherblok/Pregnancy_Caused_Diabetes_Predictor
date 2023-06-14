@@ -278,7 +278,7 @@ for (i in 1:3) {
 print("All four Likeliness Ratio tests have run 3 more times.")
 ```
 After running the Likeliness Ratio tests four times, we have to adjust the p-value and adjust the significance level. We do this according to the Bonferroni correction. This means that the significance level of 0.05 will be divided by the number of tests run, which will be most likely four. We also adjust the p-value with the `p.adjust(method="bonferroni")` function.
-We do this for all the four tests and it turns out that model 2 and 4 are not performing statistical significantly better if we run the Likeliness Ratio test four or more times, as it significance is barely below the 0.05 threshold.
+We do this for all the four tests and it turns out that model 2 and 4 are not performing statistical significantly better if we run the Likeliness Ratio test four or more times, as it significance is barely below the 0.05 threshold. In this case the earlier Null hypothesis can't be rejected and the models 1 and 3 perform better.
 ``` {r bonferroni_correction}
 
 bonferroni_corr <- function(p_value, num_run_test) {
@@ -290,7 +290,11 @@ bonferroni_corr <- function(p_value, num_run_test) {
   adjusted.p.value <- p.adjust(p_value, method = "bonferroni")
   
   # Compare the adjusted p-value to the adjusted alpha
-  if (adjusted.p.value >= adjusted.alpha || is.na(adjusted.p.value)) {
+  if(is.na(adjusted.p.value)) {
+    # The two models are the same and have no difference
+    cat("There is no significant difference between the two models, as the two models are the same.", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+  }
+  else if (adjusted.p.value >= adjusted.alpha) {
     # Fail to reject the null hypothesis
     cat("There is no significant difference between the two models (after Bonferroni correction).", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
   } else {
