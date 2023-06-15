@@ -1,0 +1,205 @@
+---
+title: "group project CIS 690"
+author: "Tsion Sherbeza"
+date: "2023-05-30"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+data <- read.csv("patients.csv")
+head(data)
+# Calculate summary statistics
+summary(data[, 1:8])
+# Calculate summary statistics
+summary_stats <- data.frame(
+  Mean = colMeans(data[, 1:8]),
+  Median = sapply(data[, 1:8], median),
+  Standard_Deviation = sapply(data[, 1:8], sd),
+  Q1 = sapply(data[, 1:8], quantile, probs = 0.25),
+  Q2 = sapply(data[, 1:8], quantile, probs = 0.5),
+  Q3 = sapply(data[, 1:8], quantile, probs = 0.75)
+)
+
+# Print the summary statistics
+print(summary_stats)
+
+```
+
+```{r}
+library(ggplot2)
+
+# Visualization 1: Histogram of Glucose levels
+ggplot(data, aes(x = Glucose)) +
+  geom_histogram(binwidth = 5, fill = "lightblue") +
+  labs(title = "Distribution of Glucose Levels", x = "Glucose", y = "Frequency")
+
+# Visualization 2: Boxplot of BMI by Diagnosis
+ggplot(data, aes(x = Diagnosis, y = BMI)) +
+  geom_boxplot(fill = "lightgreen", color = "black") +
+  labs(title = "BMI by Diagnosis", x = "Diagnosis", y = "BMI")
+
+# Visualization 3: Scatter plot of Age and BloodPressure
+ggplot(data, aes(x = Age, y = BloodPressure)) +
+  geom_point(color = "darkblue") +
+  labs(title = "Age vs. Blood Pressure", x = "Age", y = "Blood Pressure")
+
+# Visualization 4: Bar plot of the number of Pregnancies
+ggplot(data, aes(x = Pregnancies, fill = Diagnosis)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Number of Pregnancies by Diagnosis", x = "Number of Pregnancies", y = "Count")
+
+# Visualization 5: Violin plot of Insulin levels by Diagnosis
+ggplot(data, aes(x = Diagnosis, y = Insulin)) +
+  geom_violin(fill = "lightpink", color = "black") +
+  labs(title = "Insulin Levels by Diagnosis", x = "Diagnosis", y = "Insulin")
+```
+
+***Explanation***
+The histogram of glucose levels reveals the overall distribution of glucose measurements, which can help determine if there are specific ranges associated with gestational diabetes.
+The boxplot of BMI by Diagnosis shows the median, quartiles, and potential outliers for BMI, allowing for a comparison between patients with and without gestational diabetes.
+The scatter plot of age and blood pressure provides insights into any potential relationship between these variables and can help identify any patterns or trends.
+The bar plot of the number of pregnancies helps determine if there is an association between the number of pregnancies and the diagnosis of gestational diabetes.
+
+
+```{r}
+# Find missing values
+missing_values <- apply(data == 0, 2, sum)
+
+# Replace missing values with medians
+for (i in 1:length(missing_values)) {
+  if (missing_values[i] > 0) {
+    data[data[, i] == 0, i] <- median(data[, i], na.rm = TRUE)
+  }
+}
+# Calculate the IQR for each variable
+iqr_values <- apply(data[, 1:8], 2, IQR)
+
+# Find outliers using the IQR rule
+outliers <- sapply(data[, 1:8], function(x) {
+  lower <- quantile(x, 0.25) - 1.5 * iqr_values[length(iqr_values)]
+  upper <- quantile(x, 0.75) + 1.5 * iqr_values[length(iqr_values)]
+  x < lower | x > upper
+})
+```
+```{r}
+# Calculate the IQR for each variable
+iqr_values <- apply(data[, 1:8], 2, IQR)
+
+# Replace outliers with the nearest non-outlying values within a certain range (Winsorization)
+for (i in 1:ncol(data)) {
+  lower <- quantile(data[, i], 0.25) - 1.5 * IQR(data[, i])
+  upper <- quantile(data[, i], 0.75) + 1.5 * IQR(data[, i])
+  data[data[, i] < lower, i] <- lower
+  data[data[, i] > upper, i] <- upper
+}
+print(data)
+```
+```{r}
+# Set the CRAN mirror
+chooseCRANmirror(graphics=FALSE, ind=1)
+
+# Install and load the necessary library
+install.packages("ggcorrplot")
+library(ggcorrplot)
+
+# Calculate the correlation matrix
+cor_matrix <- cor(data[, 1:8])
+
+# Create a correlogram
+ggcorrplot(cor_matrix, type = "upper", lab = TRUE)
+
+```
+
+```{r}
+install.packages("caret")
+
+# Standardize the features
+standardized_data <- scale(data[, 1:8])
+# Select the best features and create the logistic regression model
+library(caret)
+
+# Create a logistic regression model
+LRM1 <- glm(Diagnosis ~ Glucose + BMI + Age, data = data, family = binomial)
+
+# Predict the outcome using LRM1
+predictions <- predict(LRM1, data, type = "response")
+
+# Convert data$Diagnosis to factor with levels
+data$Diagnosis <- factor(data$Diagnosis, levels = c(0, 1))
+
+# Convert predicted values to factor with levels
+predictions <- factor(ifelse(predictions >= 0.5, 1, 0), levels = c(0, 1))
+
+# Create a classification report
+classification_report <- caret::confusionMatrix(predictions, data$Diagnosis)
+print(classification_report)
+
+
+```
+
+
+***Explanation***
+: In the context of the classification report, precision indicates the ability of the model to correctly identify pregnant women with gestational diabetes. Higher precision values indicate a lower rate of false positives.In the context of the classification report, recall indicates the ability of the model to correctly capture and identify all pregnant women who have gestational diabetes. Higher recall values indicate a lower rate of false negatives.The F1 score considers both false positives and false negatives and provides a comprehensive measure of the model's overall performance. Higher F1 scores indicate better overall performance.In the classification report, it indicates the count of instances for each class (diabetes and non-diabetes). It helps to understand the distribution of the actual data and the number of instances used for evaluation.
+
+```{r}
+# Calculate the accuracy score
+accuracy <- sum(predictions == data$Diagnosis) / length(predictions)
+print(accuracy)
+```
+***Explanation***
+The resulting accuracy score represents the percentage of correct predictions made by the logistic regression model. It provides an overall measure of the model's performance in classifying gestational diabetes cases correctly. Higher accuracy scores indicate better performance, as they reflect a higher proportion of correct predictions compared to the total number of instances.
+
+By executing this code, you will obtain the accuracy score of the logistic regression model. It quantifies the model's ability to accurately predict the diagnosis of gestational diabetes, providing a single metric to assess the model's overall performance.
+
+```{r}
+# Create LRM2 using all independent features
+LRM2 <- glm(Diagnosis ~ ., data = data, family = binomial)
+# View the summary of LRM2
+summary(LRM2)
+
+```
+
+
+```{r}
+library(caret)
+
+# Create a logistic regression model (LRM1) with the best features
+LRM1 <- glm(Diagnosis ~ Glucose + BMI + Age, data = data, family = binomial)
+
+# Create a logistic regression model (LRM2) with all features
+LRM2 <- glm(Diagnosis ~ ., data = data, family = binomial)
+
+# Predict the outcome using LRM1 and LRM2
+predictions_LRM1 <- ifelse(predict(LRM1, data, type = "response") >= 0.5, 1, 0)
+predictions_LRM2 <- ifelse(predict(LRM2, data, type = "response") >= 0.5, 1, 0)
+
+# Convert actual values and predicted values to factors with the same levels
+actual_values <- factor(data$Diagnosis, levels = c(0, 1))
+predictions_LRM1 <- factor(predictions_LRM1, levels = c(0, 1))
+predictions_LRM2 <- factor(predictions_LRM2, levels = c(0, 1))
+
+# Create classification reports
+classification_report_LRM1 <- caret::confusionMatrix(predictions_LRM1, actual_values)
+classification_report_LRM2 <- caret::confusionMatrix(predictions_LRM2, actual_values)
+
+# Compare accuracy scores
+accuracy_LRM1 <- classification_report_LRM1$overall['Accuracy']
+accuracy_LRM2 <- classification_report_LRM2$overall['Accuracy']
+
+print(paste("Accuracy Score (LRM1):", accuracy_LRM1))
+print(paste("Accuracy Score (LRM2):", accuracy_LRM2))
+
+# Compare classification reports
+print("Classification Report (LRM1):")
+print(classification_report_LRM1)
+print("Classification Report (LRM2):")
+print(classification_report_LRM2)
+
+```
+
+
+
