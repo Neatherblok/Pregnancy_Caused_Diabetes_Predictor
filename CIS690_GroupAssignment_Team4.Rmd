@@ -1,0 +1,605 @@
+---
+title: "CIS690_GroupAssignment_Team4"
+output: word_document
+date: "`r Sys.Date()`"
+---
+
+## Install packages
+Install required project packages.
+``` {r install_pckgs}
+if(!require(tidyverse)) install.packages("tidyverse")
+if(!require(gridExtra)) install.packages("gridExtra")
+if(!require(pheatmap)) install.packages("pheatmap")
+if(!require(carat)) install.packages("caret")
+if(!require(pscl)) install.packages("pscl")
+if(!require(Metrics)) install.packages("Metrics")
+if(!require(ggstats)) install.packages("ggstats")
+if(!require(DescTools)) install.packages("DescTools")
+# Packages required to install DMwR
+if(!require(zoo) | !require(xts) | !require(quantmod)) install.packages(c("zoo","xts","quantmod"))
+if(!require(abind) | !require(ROCR)) install.packages(c("abind", "ROCR"))
+if(!require(DMwR)) install.packages( "https://cran.r-project.org/src/contrib/Archive/DMwR/DMwR_0.4.1.tar.gz", repos=NULL, type="source" )
+```
+
+## Import packages
+Import required project packages.
+```{r imp_pckgs}
+#library import
+library(tidyverse)
+library(gridExtra)
+library(pheatmap)
+library(zoo)
+library(knitr)
+library(caret)
+library(DMwR)
+library(pscl)
+library(Metrics)
+library(ggstats)
+library(DescTools)
+```
+# Importing Data
+Before our project starts on building a GDM predictor, we first need to load the provided dataset. We can import the CSV file from our GitHub repository.
+```{r import_data}
+# Load the patient data from GitHub
+patient.data <- read.csv("https://raw.github.com/Neatherblok/Pregnancy_Caused_Diabetes_Predictor/main/data/patients.csv")
+
+# Read first few rows of dataset
+head(patient.data)
+```
+
+# Removing Duplicates
+After loading and looking at the data set we checked if there were duplicate rows in the dataset. We did this by comparing the dimensions of the dataset, first the entire dataset and then what the dimensions were after picking the unique observations. It turned out that there were no duplicate observations.
+```{r rm_duplicates}
+# Data Dimension before deleting duplicates
+dim(patient.data)
+
+# Select only all unique observations
+unique.data<-unique(patient.data)
+
+# Data Dimension after deleting duplicates
+dim(unique.data)
+```
+
+# Visualizing Dependent Variable
+Now that we knew that there were no duplicates, we needed to be sure that the target is balanced. If the target variable is unbalanced the model can not perform as well because the model makes a split between the binary values in the middle and so needs to have about the same data of each feature.
+After looking at a pie chart of the two values in the **Diagnosis** variable, it seems that the False value appears the most.
+```{r target_pie_chart_1}
+# Target distribution pie chart
+ggplot(patient.data, aes(x = "", fill = factor(Diagnosis))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(fill = "Diagnosis") +
+  ggtitle("Diagnosis Distribution") +
+  theme_void()
+```
+
+# Balancing Dependent Variable
+Since the value distribution of **Diagnosis** is not even, the dataset gets downsized on the "0" value. We did this by creating a subset where the dependent variable had a "0" value. Then, we removed the rows that also included 0s for the variables **Glucose**, **BloodPressure**, **SkinThickness**, **Insulin**, and **BMI**. After removing the rows that had both a 0 value in **Diagnosis** and one in the other independent variables (with exception of **Pregnancies**), we merged the subsets of Diagnosis = 0 and 1 back together.
+
+```{r balancing_target}
+# Create subset of Diagnosis = 0 observations
+no.diabetes <- patient.data[patient.data$Diagnosis == 0, ]
+
+#  Finding the odd rows: Check for 0 values in specified columns and remove the rows
+filtered.data <- no.diabetes[!(no.diabetes$Glucose == 0 | no.diabetes$BloodPressure == 0 | no.diabetes$SkinThickness == 0 | no.diabetes$Insulin == 0 | no.diabetes$BMI == 0), ]
+
+# Combine the filtered rows with the remaining rows that have Diagnosis value not equal to 0
+balanced.patient.data <- rbind(filtered.data, patient.data[patient.data$Diagnosis != 0, ])
+
+# row index are reset
+row.names(balanced.patient.data) <- NULL
+
+# Show first few rows of data set
+head(balanced.patient.data)
+
+# Show last few rows of data set
+tail(balanced.patient.data)
+```
+
+# Visualizing Balanced Dependent Variable
+After balancing the target variable **Diagnosis** we can have another look at the pie chart and see that the distribution is now more similar.
+We also checked the actual number for each value of the target and found that the numbers are really close to each other and approximately follow a 50/50 distribution.
+```{r target_pie_chart_2}
+# Distribution of target variable post downscaling
+ggplot(balanced.patient.data, aes(x = "", fill = factor(Diagnosis))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  labs(fill = "Diagnosis") +
+  ggtitle("Diagnosis_Distribution") +
+  theme_void()
+
+# Diagnosis distribution in numbers which follows approx 50%:50%
+diagnosis.counts <- table(balanced.patient.data$Diagnosis)
+print(diagnosis.counts)
+```
+
+# Descriptive Statistic
+After balancing the data set, we can have a look at how the other independent variables behave. We can do this by summarizing these features and visualizing them in box plots and histograms.
+By looking at the summary, there are a few points that are popping out. Such as the minimum value for **Glucose, BloodPressure, SkinThickness, Insulin** and **BMI**. These are variables that can't be having a minimum value of 0 and need to be treated missing values later on. Besides this, it looks like there also might be outliers in the data but that needs to be further explored.
+```{r descriptive_stat}
+# Summarize descriptive stats
+summary(balanced.patient.data[, 1:8])
+```
+
+By looking at the box plot, we see that there are quite some outliers in the data that appear above and under the whiskers. These will have to be addressed.
+```{r box_plot}
+# Box Plot
+independent.features <- balanced.patient.data[, 1:8]
+long_data <- pivot_longer(independent.features, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+```
+
+By looking in the histograms we can say that except **BloodPressure** and **BMI**, non of the other variables follow a normal distribution. But a normal distribution is not assumed by a logistic regression, so not a priority for us.
+```{r histogram}
+# Histogram
+Pregnancies <- ggplot(independent.features, aes(x = Pregnancies)) + geom_histogram() + ggtitle("Pregnancies")
+Glucose <- ggplot(independent.features, aes(x = Glucose)) + geom_histogram() + ggtitle("Glucose")
+BloodPressure <- ggplot(independent.features, aes(x = BloodPressure)) + geom_histogram() + ggtitle("Blood Pressure")
+SkinThickness <- ggplot(independent.features, aes(x = SkinThickness)) + geom_histogram() + ggtitle("Skin Thickness")
+Insulin <- ggplot(independent.features, aes(x = Insulin)) + geom_histogram() + ggtitle("Insulin")
+BMI <- ggplot(independent.features, aes(x = BMI)) + geom_histogram() + ggtitle("BMI")
+Pedigree <- ggplot(independent.features, aes(x = Pedigree)) + geom_histogram() + ggtitle("Pedigree")
+Age <- ggplot(independent.features, aes(x = Age)) + geom_histogram() + ggtitle("Age")
+grid.arrange(
+  Pregnancies, Glucose, BloodPressure, SkinThickness,
+  Insulin, BMI, Pedigree, Age,
+  nrow = 3
+)
+```
+
+## Missing Data Handling
+As pointed out, there are still some variables that contain 0 values where this does not make sense. The only independent variable where this would make sense for is **Pregnancies** as it is possible to get diabetes without ever having been pregnant. We will be treated the 0 values for all other independent variables as missing values and be replacing them with the median. 
+We chose for the median as the mean could be heavily influenced by the outliers that will be treated later.
+```{r miss_val_handling}
+# All zeros are treated as missing values and replaced with median
+for (i in 2:8) {
+  balanced.patient.data[, i] <- ifelse(balanced.patient.data[, i] == 0, median(balanced.patient.data[balanced.patient.data[, i] != 0, i], na.rm = TRUE), balanced.patient.data[, i])
+}
+
+# Change name of data set
+cleaned.patient.data <- balanced.patient.data
+
+# Read First Few rows to see if 0's were replaced by median of the column
+head(cleaned.patient.data)
+```
+
+## Removing Outliers
+After all missing values are treated by replacing with median, we can replace the outliers. We will use the interquartile range to determine outliers and replace values outside of the 1.5xIQR with the value that is at 1.5xIQR. We will do this for all independent variables. We found out that this was a better method, because we would still have variables if we would have replaced all outliers with the median as the IQR would become smaller.
+After capping we can once again built a box plot and in it we see that there are no outliers.
+```{r outlier_handling}
+# Removing outliers using capping method
+treating.outliers <- function(x) {
+  qntls <- quantile(x, probs = c(0.25, 0.75))
+  iqr <- qntls[2] - qntls[1]
+  lb <- qntls[1] - 1.5 * iqr
+  ub <- qntls[2] + 1.5 * iqr
+  x[x < lb] <- lb
+  x[x > ub] <- ub
+  return(x)
+}
+
+# Execute function for all independent variables
+cleaned.patient.data[, 1:8] <- apply(cleaned.patient.data[, 1:8], 2, treating.outliers)
+
+# By the revised box plot you can see that the outliers are treated and not present in the data that we are going to further analyse
+cleaned.independent.variables <- cleaned.patient.data[, 1:8]
+long_data <- pivot_longer(cleaned.independent.variables, everything(), names_to = "variable", values_to = "value")
+ggplot(long_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Value") +
+  theme_minimal()
+```
+
+We can now have a look at how the data set looks like after it has been cleaned.
+```{r}
+# check summary post data cleaning
+summary(cleaned.patient.data)
+```
+## Correlation Check
+We can now start thinking about building the models. We would like to select the best features to train some of the models on, while also training models on all features.
+With a correlogram we can select the best features, but we can also look for correlations between the independent variables.
+When looking at the correlation of the independent variables, four variables look the strongest. Those four variables are:
+
+- Glucose
+- Age
+- Pregnancies
+- BMI
+
+We will be training models on these features. But it also looks like independent variables **Age** and **Pregnancies** are correlated, so we will also train a model without age to see how this influences the model in comparison to if it was kept.
+
+```{r correlogram}
+# Check for correlation post data cleaning
+Correlation.Mtrx <- cor(cleaned.patient.data)
+Correlation.Percentages <- round(Correlation.Mtrx * 100, 2)
+pheatmap(Correlation.Percentages,
+         main = "Correlation Matrix (%)",
+         fontsize = 8,
+         fontsize_row = 6,
+         fontsize_col = 6,
+         color = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         display_numbers = TRUE,
+         number_color = "black",
+         number_format = "%.2f%%")
+
+```
+
+## Splitting Dataset 1
+After selecting the best features, we can now split the dataset in a train and test set through a random 80/20 split. We decided to choose for a 80/20 split as we would like to have as much data to train the model on so the model can generalize as much as possible, while also still remaining a good number of observations to test our model on.
+We will be splitting the data set on random generator seed *130*, to maintain reproducibility.
+``` {r rand_split_1}
+# pre-set properties for random split 
+train.size = floor(0.8*nrow(cleaned.patient.data))
+set.seed(130)
+
+# randomly split data in r according to generator seed 130
+picked = sample(seq_len(nrow(cleaned.patient.data)),size = train.size)
+
+# Divide the data set up in two data set according to picked sample
+train.data.not.normal = cleaned.patient.data[picked,]
+test.data.not.normal = cleaned.patient.data[-picked,]
+
+# Reset row index
+rownames(train.data.not.normal) <- NULL
+rownames(test.data.not.normal) <- NULL
+
+# Show the two split data sets
+head(train.data.not.normal)
+head(test.data.not.normal)
+```
+
+## Normalizing Dataset
+Even though there is not a normalization for the logistic regression model, we would like to see how normalization influences the performance of the model. We will do this through a min-max scale. This means that all values will be divided by their max, while the min is put to 0, to get all values between 0 and 1. We use normalization to make variables have a similar scale, which improves training stability and performance.
+
+``` {r normalize}
+# Set up normalization function
+process <- preProcess(cleaned.patient.data, method=c("range"))
+
+# Execute Min-Max normalization on the cleaned data set
+norm.data <- predict(process, cleaned.patient.data)
+
+# Show normalized data set
+head(norm.data)
+```
+
+## Splitting Dataset 2
+After normalizing the dataset, we can once again split the dataset in a train and test set through a random 80/20 split, with random generator seed *130*.
+``` {r rand_split_2}
+# Divide the data set up in two data set according to picked sample
+train.data.normal = norm.data[picked,]
+test.data.normal = norm.data[-picked,]
+
+# Reset row index
+rownames(train.data.normal) <- NULL
+rownames(test.data.normal) <- NULL
+
+# Show the two split data sets
+head(train.data.normal)
+head(test.data.normal)
+```
+
+## Train Logistic Regression Model 1
+After splitting, the models can get trained. The first model will be trained on the four most correlated variables of the normalized data set. As dependent variable we will be using Diagnosis.
+This model trains with family being binomial, with a logit link. The family being binomial means that the output of the model and the dependent variable will be binary value. The logit link specifies that this binary classification is a logistic regression, and it maps the probability of success to the linear predictor.
+``` {r train_lrm_1}
+# Train Logistic Regression model 2
+model.1 <- glm(Diagnosis ~ Pregnancies + Age + Glucose + BMI, data = train.data.normal, family = binomial(link='logit'))
+```
+
+Now that the model has been trained, we can get a summary of what the findings of the model are on the original feature set. It shows which independent features have the most value for the eventual prediction of the dependent variable. The variables with the lowest p-value and most amount of stars have the most influence on the dependent variable.
+``` {r summ_lrm_1}
+# Summarize the findings of the first Logistic Regression model
+summary(model.1)
+```
+
+Now that the first Logistic Regression model has been trained on the best features normalized set, it can predict the values that are in the normalized test set. It will do this through the response type which will give back a probability for the tested observation between 0 and 1. 
+After all the observations are fitted, the predictions get converted to a binary value depending on the probability score. Values with a probability of 0.5 or higher gets converted to a 1 value, values under 0.5 get converted to the 0 value.
+``` {r pred_lrm_1}
+# Predict the outcome using Logistic Regression Model 1
+mdl.1.fitted.results <- predict(model.1, test.data.normal[,c("Pregnancies", "Age", "Glucose", "BMI")], type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.1 <- ifelse(mdl.1.fitted.results >= 0.5, 1, 0)
+```
+
+After the logistic regression model predicted the values from the test set based on the best feature, a classification report can be generated of the performance of the model predictions, with the `confusionMatrix()` function from the caret package.
+``` {r conf_matrix_lrm_1}
+# Create a classification report for Logistic Regression Model 1
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.1 <- caret::confusionMatrix(factor(predictions.mdl.1), factor(test.data.normal$Diagnosis))
+print(classification.report.mdl.1)
+```
+
+## Train Logistic Regression Model 2
+After training Logistic Regression Model 1, we will try out what the difference is with a model that is normalized and still has all features. This model will be trained on all the features from the normalized train data set, with Diagnosis as the dependent variable and tested on the normalized test data with all features in the same way as Logistic Regression Model 1 is trained and tested.
+``` {r train_lrm_2}
+# Train Logistic Regression model 2
+model.2 <- glm(Diagnosis ~.,family=binomial(link='logit'),data=train.data.normal)
+```
+
+``` {r summ_lrm_2}
+# Summarize the findings of the second Logistic Regression model
+summary(model.2)
+```
+
+``` {r pred_lrm_2}
+# Predict the outcome using Logistic Regression Model 2
+mdl.2.fitted.results <- predict(model.2, test.data.normal, type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.2 <- ifelse(mdl.2.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_2}
+# Create a classification report
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.2 <- caret::confusionMatrix(factor(predictions.mdl.2), factor(test.data.normal$Diagnosis))
+print(classification.report.mdl.2)
+```
+
+## Train Logistic Regression Model 3
+After training Logistic Regression Model 1 and 2, we are trying out to see what the difference is with a model that is not normalized and has its best features selected. This model will be trained on the non scaled train data set, with Diagnosis as the dependent variable and tested on the non-scaled test data with the best features in the same way as Logistic Regression Model 1 is trained and tested.
+``` {r train_lrm_3}
+# Train Logistic Regression model 3
+model.3 <- glm(Diagnosis ~Pregnancies + Age + Glucose + BMI, data = train.data.not.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_3}
+# Summarize the findings of the third Logistic Regression model
+summary(model.3)
+```
+
+``` {r pred_lrm_3}
+# Predict the outcome using Logistic Regression Model 3
+mdl.3.fitted.results <- predict(model.3, test.data.not.normal[,c("Pregnancies", "Age", "Glucose", "BMI")], type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.3 <- ifelse(mdl.3.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_3}
+# Create a classification report for Logistic Regression Model 3
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.3 <- caret::confusionMatrix(factor(predictions.mdl.3), factor(test.data.not.normal$Diagnosis))
+print(classification.report.mdl.3)
+```
+
+## Train Logistic Regression Model 4
+After training Logistic Regression model 3, we also want to know like model 2 how this model trained on the dataset with all features responds to the model trained on the best features. Just like model 3, we will be doing this on the non-scaled dataset. This model will be trained on the non scaled train data set, with Diagnosis as the dependent variable and tested on the non-scaled test data with the all features in the same way as Logistic Regression Model 2 is trained and tested.
+``` {r train_lrm_4}
+# Train Logistic Regression model 4
+model.4 <- glm(Diagnosis ~ ., data = train.data.not.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_4}
+# Summarize the findings of the fourth Logistic Regression model
+summary(model.4)
+```
+
+``` {r pred_lrm_4}
+# Predict the outcome using Logistic Regression Model 4
+mdl.4.fitted.results <- predict(model.4, test.data.not.normal,type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.4 <- ifelse(mdl.4.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_4}
+
+# Create a classification report for Logistic Regression Model 4
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.4 <- caret::confusionMatrix(factor(predictions.mdl.4), factor(test.data.not.normal$Diagnosis))
+print(classification.report.mdl.4)
+```
+
+## Train Logistic Regression Model 5
+After training Logistic Regression model 4, we also want to know how the model performs when it is trained on the best features but without **Age** as this variable is correlated with **Pregnancies** as well. This model will be trained on the scaled train data set.
+``` {r train_lrm_5}
+# Train Logistic Regression model 5
+model.5 <- glm(Diagnosis ~ Pregnancies + Glucose + BMI, data = train.data.normal, family = binomial(link='logit'))
+```
+
+``` {r summ_lrm_5}
+# Summarize the findings of the fifth Logistic Regression model
+summary(model.5)
+```
+
+``` {r pred_lrm_5}
+# Predict the outcome using Logistic Regression Model 5
+mdl.5.fitted.results <- predict(model.5, test.data.normal,type='response')
+
+# Transform predicted probability values with a probability higher than 0.5 to 1
+# Transform values with probability lower than 0.5 to 0
+predictions.mdl.5 <- ifelse(mdl.5.fitted.results >= 0.5, 1, 0)
+```
+
+``` {r conf_matrix_lrm_5}
+# Create a classification report for Logistic Regression Model 5
+# This includes a confusion matrix, accuracy score, ACI score, confidence interval and other scores
+classification.report.mdl.5 <- caret::confusionMatrix(factor(predictions.mdl.5), factor(test.data.normal$Diagnosis))
+print(classification.report.mdl.5)
+```
+
+### Comparing the models
+After all models have been trained, we are able to compare the models based on the classification report and accuracy scores that have been generated based on the test sets. In the following code, all accuracy, AIC and confidence interval scores are put beside each other.
+What stands out in this comparison is the following:
+
+- Both models that are trained on the best features dataset are performing the same
+- Both models that are trained on all features perform the same as well
+
+This means that normalization of the data does not influence the result of a logistic regression model.
+
+Other findings are:
+
+- The models trained on the best features have a higher accuracy score than the models trained on all features
+- The models trained on all features have a lower AIC score and smaller Confidence Interval ratio.
+- The model trained on the best features but without **Age** has a slightly lower accuracy than the best features model.
+- The model trained on the best features but without **Age** has a lot worse AIC score compared to the other models.
+
+This means that it is not clear which model actually performs the best. Normally AIC penalizes the model with more features heavier, but in this case this did not happen. This means that the models with all features might actually be a better predictor, which needs to be researched through a Likeliness Ratio Hypothesis test.
+
+``` {r comparison}
+df <- data.frame(Metrics=c("Accuracy", "AIC", "Confidence Interval Lower", "Confidence Interval Higher"),
+                  select_feature_normal=c(classification.report.mdl.1$overall[1], AIC(model.1),
+                              classification.report.mdl.1$overall[3], classification.report.mdl.1$overall[4]),
+                 
+                  all_normal=c(classification.report.mdl.2$overall[1], AIC(model.2), 
+                               classification.report.mdl.2$overall[3], classification.report.mdl.2$overall[4]),
+                 
+                  select_feature_not_normal=c(classification.report.mdl.3$overall[1], AIC(model.3),
+                                classification.report.mdl.3$overall[3], classification.report.mdl.3$overall[4]),
+                 
+                  all_not_normal=c(classification.report.mdl.4$overall[1], AIC(model.4), 
+                                classification.report.mdl.4$overall[3], classification.report.mdl.4$overall[4]),
+                 
+                  without_age_normal=c(classification.report.mdl.5$overall[1], AIC(model.5), 
+                                classification.report.mdl.5$overall[3], classification.report.mdl.5$overall[4]))
+
+# Set metrics column as index
+rownames(df) <- df$Metrics
+
+# Remove original metrics column from data frame
+df$Metrics <- NULL
+
+# Show results
+df
+```
+
+### Visualizing Coefficients
+Underneath is the relationship between the coefficients and the dependent variable *Diabetes* visualized. This visualization shows how each coefficient for each model relate to the dependent variable. Where the left means a low logarithmic connection and to the right means a stronger relationship. The visualization also shows the p-value on if the relationship between the coefficient and dependent variable is significant. If the p-value is under 0.05, the dot in the middle is entirely colored in, otherwise its white in the middle. The visualization also shows whiskers for each plot. These whiskers represent the uncertainty of the variance for the coefficient. If whiskers are small, it means there is a small uncertainty of variance meaning that the standard deviation of its residuals is small.
+``` {r coef_plot}
+# Visualize logistic regression coefficients
+ggcoef_model(model.1)
+ggcoef_model(model.2)
+ggcoef_model(model.3)
+ggcoef_model(model.4)
+ggcoef_model(model.5)
+```
+
+### Hypothesis testing
+``` {r anova_runs}
+# Number of times one anova comparison has been run
+anova.runs <- list(
+  anova.1 = 0,
+  anova.2 = 0,
+  anova.3 = 0,
+  anova.4 = 0,
+  anova.5 = 0
+)
+```
+
+All models are trained, and compared by Accuracy, AIC and confidence interval. This has resulted in a few findings and predictions that would need to be tested through a hypothesis. To compare logistic regression models, we are going to be using a Likeliness Ratio test, that tests the maximum likelihood estimates of coefficients to each other where it determines if it needs to reject a restriction of a coefficient or not.
+It seems like Model 1 and 3 are both equally significant and there is no difference. The same counts for model 2 and 4. When comparing model 1 and 2 and model 3 and 4, we can see that there is a difference in deviance and p-value. The p-value for both likelihood tests are about 0.0497, which is statistically significant and means that the models with all features perform better, but not by a lot (it is just below 0.05).
+When Model 1 and 5 are compared, we see that the model trained with all best features performs better than the model trained on best features without **Age**. It is shown that the p-value is very low and the deviance is negative meaning that the first model is performing better.
+What all Likeliness Ratio tests also show us are that the first two Likeliness Ratio tests and the last two deliver us the same results. Based on which models we are comparing, we can also prove that scaling the dataset has not influenced the model results. This means that logistic regression is not tricked by the size of data, but it can be tricked by outliers.
+``` {r hypothesis}
+# Testing significance of model 1 compared to model 3
+# H0: Model 1 (min-max scaled;best features selected) is more significant than model 3 (original scale; best features selected)
+execute.anova.1 <- function() {
+  eval.parent(substitute(anova.runs$anova.1 <- anova.runs$anova.1 + 1))
+  return(anova(model.1,model.3, test='LRT'))
+}
+
+# Testing significance of model 2 compared to model 4
+# H0: Model 2 (min-max scaled; all features) is more significant than model 4 (original scale; all features)
+execute.anova.2 <- function() {
+  eval.parent(substitute(anova.runs$anova.2 <- anova.runs$anova.2 + 1))
+  return(anova(model.2, model.4, test='LRT'))
+}
+
+# Testing significance of model 1 compared to model 2
+# H0: Model 1 (min-max scaled; best features selected) is more significant than model 2 (min-max scaled; all features)
+execute.anova.3 <- function() {
+  eval.parent(substitute(anova.runs$anova.3 <- anova.runs$anova.3 + 1))
+  return(anova(model.1, model.2, test='LRT'))
+}
+
+# Testing significance of model 1 compared to model 5
+# H0: Model 1 (min-max scaled; best features selected) is more significant than model 5 (min-max scaled; best features without Age)
+execute.anova.4 <- function() {
+  eval.parent(substitute(anova.runs$anova.4 <- anova.runs$anova.4 + 1))
+  return(anova(model.1, model.5, test='LRT'))
+}
+
+# Testing significance of model 3 compared to model 4
+# H0: Model 3 (original scale; best features selected) is more significant than model 4 (original scale; all features)
+execute.anova.5 <- function() {
+  eval.parent(substitute(anova.runs$anova.5 <- anova.runs$anova.5 + 1))
+  return(anova(model.3, model.4, test='LRT'))
+}
+
+# Execute the four Likeliness Ratio tests
+# Print Likeliness Ratio test results
+anova.1 <- execute.anova.1()
+print(anova.1)
+anova.2 <- execute.anova.2()
+print(anova.2)
+anova.3 <- execute.anova.3()
+print(anova.3)
+anova.4 <- execute.anova.4()
+print(anova.4)
+anova.5 <- execute.anova.5()
+print(anova.5)
+
+```
+
+# Bonferroni correction
+To make sure that the models 2 and 4 always perform statistical significantly better, we can run the models a three more times and correct the p-value through Bonferroni correction. After running the Likeliness Tests another three times, we have now run them four times in total.
+``` {r run_more}
+# Run Likeliness Ratio tests 3 more times, to use bonferroni correction
+for (i in 1:3) {
+  anova.1 <- execute.anova.1()
+  anova.2 <- execute.anova.2()
+  anova.3 <- execute.anova.3()
+  anova.4 <- execute.anova.4()
+  anova.5 <- execute.anova.5()
+  
+}
+print("All four Likeliness Ratio tests have run 3 more times.")
+```
+
+After running the Likeliness Ratio tests four times, we have to adjust the p-value and adjust the significance level. We do this according to the Bonferroni correction. This means that the significance level of 0.05 will be divided by the number of tests run, which will be most likely four. We also adjust the p-value with the `p.adjust(method="bonferroni")` function.
+We do this for all the four tests and it turns out that model 2 and 4 are not performing statistical significantly better if we run the Likeliness Ratio test four or more times, as it significance is barely below the 0.05 threshold. In this case the earlier Null hypothesis can't be rejected and the models 1 and 3 perform better.
+We also see that the best features model still performs better than the model without the **Age** variable after correction. This means that the model trained on the best features is the best model, where this is probably model 1 as this does not require normalizing the data before feeding it. Which results in a faster prediction speed.
+``` {r bonferroni_correction}
+
+bonferroni_corr <- function(p_value, num_run_test) {
+  
+  # Apply Bonferroni correction
+  adjusted.alpha <- 0.05 / num_run_test
+  
+  # Adjust the p-value using Bonferroni correction
+  adjusted.p.value <- p.adjust(p_value, method = "bonferroni")
+  
+  # Compare the adjusted p-value to the adjusted alpha
+  if(is.na(adjusted.p.value)) {
+    # The two models are the same and have no difference
+    cat("There is no significant difference between the two models, as the two models are the same.", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+  }
+  else if (adjusted.p.value >= adjusted.alpha) {
+    # Fail to reject the null hypothesis
+    cat("There is no significant difference between the two models (after Bonferroni correction).", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+  } else {
+    # Reject the null hypothesis and conclude significant difference
+    cat("There is a significant difference between the two models (after Bonferroni correction).", "\nThe adjusted significance level is:", adjusted.alpha, "\nThe adjusted p-value is:", adjusted.p.value, "\n")
+
+  }
+}
+
+# Execute Bonferroni correction for all four Likeliness Ratio tests
+bonferroni_corr(anova.1$Pr[2], anova.runs$anova.1)
+bonferroni_corr(anova.2$Pr[2], anova.runs$anova.2)
+bonferroni_corr(anova.3$Pr[2], anova.runs$anova.3)
+bonferroni_corr(anova.4$Pr[2], anova.runs$anova.4)
+bonferroni_corr(anova.5$Pr[2], anova.runs$anova.5)
+```
